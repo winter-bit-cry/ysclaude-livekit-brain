@@ -113,9 +113,10 @@ App 每次开始通话时通过 HTTPS 把当前模型配置交给 Brain。Brain 
 ## 区域和资源建议
 
 - Zeabur、LiveKit 与模型服务之间的距离会直接影响语音延迟。阿里北京区 Key 优先选靠近中国大陆的 Zeabur/LiveKit 区域；新加坡区 Key 优先选新加坡区域。
-- 建议至少分配 1 GB 内存。LiveKit Agents、ONNX Runtime 和 Silero 启动时会占用明显高于普通 FastAPI 服务的内存。
+- 当前按个人单用户部署配置为 `num_idle_processes=0`，不会预热 LiveKit 生产模式默认的 16 个空闲任务进程；第一次通话会按需创建任务。
+- Zeabur 副本数设置为 1，建议至少分配 1 GB 内存；如果仍出现 `Evicted: MemoryPressure`，提高到 2 GB 或更换负载较低的区域节点。
 - Agent 通过出站 WebSocket 连接 LiveKit；Zeabur 只需公开 FastAPI 的一个 HTTP 端口。
-- 多副本可以共享同一组 LiveKit credentials 和 `BRAIN_CONFIG_KEY`，LiveKit 会负责 Agent 作业分发。
+- 个人使用不需要多副本。以后需要并发时，再增加 `num_idle_processes`、副本数和内存。
 
 ## 本地运行
 

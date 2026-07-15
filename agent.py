@@ -16,7 +16,11 @@ from session_crypto import decrypt_session_config
 
 load_dotenv(".env.local")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-server = AgentServer()
+# Personal deployment: do not prewarm the production default of 16 idle job
+# processes. A job is created on demand when the single user starts a call.
+server = AgentServer(
+    num_idle_processes=0,
+)
 
 
 @server.rtc_session(agent_name=os.getenv("LIVEKIT_AGENT_NAME", "ysclaude-voice"))
