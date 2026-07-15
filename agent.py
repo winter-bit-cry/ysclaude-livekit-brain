@@ -91,7 +91,12 @@ async def ysclaude_voice(ctx: JobContext) -> None:
             min_interruption_duration=0.2,
             resume_false_interruption=True,
         ),
-        preemptive_generation=True,
+        # Visual frames are appended in on_user_turn_completed. If preemptive
+        # generation is enabled, LiveKit may reuse a reply that started before
+        # the current frame was attached, making the model see the image one
+        # turn late. Keep the latency optimization for voice-only calls, but
+        # wait for the completed multimodal message in visual modes.
+        preemptive_generation=config.visual_mode == "voice",
         video_sampler=latest_video.sample if config.visual_mode != "voice" else None,
     )
     chat_ctx = ChatContext.empty()
