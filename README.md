@@ -12,7 +12,7 @@ YSClaude App --WebRTC--> LiveKit
 YSClaude App <--WebRTC------+
 ```
 
-当前只处理语音通话，不发布摄像头或屏幕轨道。
+支持纯语音、摄像头视频和共享屏幕通话。App 通过 LiveKit 同时发布麦克风与可选视频轨道；Brain 在每轮用户语音结束时将最新视频帧加入视觉模型上下文。
 
 ## Zeabur 运行结构
 
@@ -108,7 +108,7 @@ Brain Access Token：与 BRAIN_SHARED_SECRET 相同
 - 阿里 DashScope API Key、`qwen3-asr-flash-realtime` 和语言 `zh`。
 - Cartesia API Key、模型和 Voice ID。
 
-App 每次开始通话时通过 HTTPS 把当前模型配置交给 Brain。Brain 使用服务端 LiveKit API 创建加密的 Agent dispatch；模型密钥不会进入 App 获得的 LiveKit JWT。dispatch 配置的解密有效期为 15 分钟。
+App 每次开始通话时通过 HTTPS 把当前模型配置、当前会话的最近上下文和已启用工具定义交给 Brain。Brain 使用服务端 LiveKit API 创建压缩并加密的 Agent dispatch；模型密钥不会进入 App 获得的 LiveKit JWT。dispatch 配置的解密有效期为 15 分钟。工具实际执行仍在 App 内，通过 LiveKit RPC 返回结果。
 
 ## 区域和资源建议
 

@@ -57,7 +57,7 @@ async def create_session(
             can_publish=True,
             can_subscribe=True,
             can_publish_data=True,
-            can_publish_sources=["microphone"],
+            can_publish_sources=["microphone", "camera", "screen_share"],
         ))
         .to_jwt()
     )

@@ -6,7 +6,8 @@ import asyncio
 import json
 
 from dotenv import load_dotenv
-from livekit.agents import Agent, AgentServer, AgentSession, JobContext, TurnHandlingOptions, cli, inference
+from livekit.agents import Agent, AgentServer, AgentSession, ChatContext, JobContext, TurnHandlingOptions, cli, function_tool, inference, llm
+from livekit.agents.voice.room_io import RoomOptions
 from livekit.plugins import cartesia, openai, silero
 
 from aliyun_stt import AliyunSTT
@@ -23,9 +24,35 @@ server = AgentServer(
 )
 
 
+class _LatestVideoFrame:
+    frame = None
+
+    def sample(self, frame, _session) -> bool:
+        self.frame = frame
+        # The OpenAI-compatible chat LLM receives a still image at the end of
+        # each spoken turn; it does not consume the realtime video channel.
+        return False
+
+
+class _VisualAgent(Agent):
+    def __init__(self, *, latest_video: _LatestVideoFrame, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._latest_video = latest_video
+
+    async def on_user_turn_completed(
+        self, _turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+    ) -> None:
+        if self._latest_video.frame is not None:
+            new_message.content.append(llm.ImageContent(
+                image=self._latest_video.frame,
+                inference_detail="low",
+            ))
+
+
 @server.rtc_session(agent_name=os.getenv("LIVEKIT_AGENT_NAME", "ysclaude-voice"))
 async def ysclaude_voice(ctx: JobContext) -> None:
     config = SessionConfig.model_validate_json(decrypt_session_config(ctx.job.metadata))
+    latest_video = _LatestVideoFrame()
     vad = silero.VAD.load(min_silence_duration=0.35, min_speech_duration=0.08)
     session = AgentSession(
         vad=vad,
@@ -61,9 +88,25 @@ async def ysclaude_voice(ctx: JobContext) -> None:
             resume_false_interruption=True,
         ),
         preemptive_generation=True,
+        video_sampler=latest_video.sample if config.visual_mode != "voice" else None,
     )
-    agent = Agent(instructions=_voice_instructions(config.system_prompt))
-    await session.start(room=ctx.room, agent=agent)
+    chat_ctx = ChatContext.empty()
+    for message in config.history_messages:
+        chat_ctx.add_message(role=message.role, content=message.content)
+    agent = _VisualAgent(
+        latest_video=latest_video,
+        instructions=_voice_instructions(config.system_prompt, config.visual_mode),
+        chat_ctx=chat_ctx,
+        tools=[_create_frontend_tool(ctx, config.identity, tool.model_dump()) for tool in config.tools],
+    )
+    await session.start(
+        room=ctx.room,
+        agent=agent,
+        room_options=RoomOptions(
+            video_input=config.visual_mode != "voice",
+            participant_identity=config.identity,
+        ),
+    )
 
     @ctx.room.on("data_received")
     def on_data_received(packet) -> None:
@@ -82,12 +125,51 @@ async def ysclaude_voice(ctx: JobContext) -> None:
         await session.generate_reply(instructions=config.opening_instruction)
 
 
-def _voice_instructions(system_prompt: str) -> str:
+def _voice_instructions(system_prompt: str, visual_mode: str = "voice") -> str:
+    call_instruction = "当前是实时语音通话，没有视觉画面。不要声称看到了用户或屏幕。"
+    if visual_mode == "video":
+        call_instruction = (
+            "当前是实时视频通话。用户正在发送摄像头画面，每轮都可参考随用户消息"
+            "附带的最新画面；无法看清时明确询问，不要臆测。"
+        )
+    elif visual_mode == "screen":
+        call_instruction = (
+            "当前是实时共享屏幕通话。每轮都可参考随用户消息附带的最新屏幕画面，"
+            "重点关注界面、文字和用户操作；无法看清时明确询问，不要臆测。"
+        )
     return (
         f"{system_prompt.strip()}\n\n"
-        "当前是实时语音通话。回复要简洁、自然、适合直接朗读；避免 Markdown 表格、"
+        f"{call_instruction}回复要简洁、自然、适合直接朗读；避免 Markdown 表格、"
         "长列表和复杂符号。先给结论，再在必要时补充。用户插话时立即停止当前回答。"
     )
+
+
+def _create_frontend_tool(ctx: JobContext, participant_identity: str, definition: dict):
+    function = definition["function"]
+    raw_schema = {
+        "name": function["name"],
+        "description": function.get("description", ""),
+        "parameters": function.get("parameters") or {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    }
+
+    async def handler(raw_arguments: dict[str, object], _run_context):
+        response = await ctx.room.local_participant.perform_rpc(
+            destination_identity=participant_identity,
+            method="ysclaude.execute_tool",
+            payload=json.dumps({
+                "name": function["name"],
+                "arguments": raw_arguments,
+            }, ensure_ascii=False),
+            response_timeout=60.0,
+        )
+        result = json.loads(response)
+        return result.get("text", response)
+
+    return function_tool(handler, raw_schema=raw_schema)
 
 
 if __name__ == "__main__":
