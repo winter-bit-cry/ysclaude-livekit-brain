@@ -30,7 +30,7 @@ class CartesiaTTSConfig(BaseModel):
 
 class HistoryMessage(BaseModel):
     role: str = Field(pattern="^(system|user|assistant)$")
-    content: str = Field(max_length=32_000)
+    content: str
 
 
 class ToolFunction(BaseModel):
@@ -47,11 +47,11 @@ class ToolDefinition(BaseModel):
 class SessionConfig(BaseModel):
     identity: str = Field(min_length=1, max_length=128)
     display_name: str = Field(default="YSClaude 用户", max_length=128)
-    system_prompt: str = Field(default="You are a helpful assistant.", max_length=100_000)
+    system_prompt: str = "You are a helpful assistant."
     opening_instruction: str | None = Field(default=None, max_length=4_000)
     conversation_id: str | None = Field(default=None, max_length=128)
     visual_mode: str = Field(default="voice", pattern="^(voice|video|screen)$")
-    history_messages: list[HistoryMessage] = Field(default_factory=list, max_length=200)
+    history_messages: list[HistoryMessage] = Field(default_factory=list)
     tools: list[ToolDefinition] = Field(default_factory=list, max_length=200)
     llm: LLMConfig
     stt: AliyunSTTConfig

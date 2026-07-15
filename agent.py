@@ -92,7 +92,6 @@ async def ysclaude_voice(ctx: JobContext) -> None:
             base_url=config.llm.base_url.rstrip("/"),
             model=config.llm.model,
             temperature=config.llm.temperature,
-            max_completion_tokens=config.llm.max_completion_tokens,
         ),
         tts=cartesia.TTS(
             api_key=config.tts.api_key,
