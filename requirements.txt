@@ -1,0 +1,8 @@
+livekit-agents[openai,silero]~=1.6
+livekit-plugins-cartesia~=1.6
+livekit-api~=1.0
+fastapi~=0.116
+uvicorn[standard]~=0.35
+python-dotenv~=1.1
+websockets~=15.0
+cryptography~=46.0
