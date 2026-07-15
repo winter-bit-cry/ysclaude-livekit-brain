@@ -52,6 +52,10 @@ class _VisualAgent(Agent):
 @server.rtc_session(agent_name=os.getenv("LIVEKIT_AGENT_NAME", "ysclaude-voice"))
 async def ysclaude_voice(ctx: JobContext) -> None:
     config = SessionConfig.model_validate_json(decrypt_session_config(ctx.job.metadata))
+    # RoomIO, video subscription and frontend RPC all require the agent's local
+    # participant. Explicitly connect before constructing/starting AgentSession;
+    # relying on implicit connection is version-dependent and can race startup.
+    await ctx.connect()
     latest_video = _LatestVideoFrame()
     vad = silero.VAD.load(min_silence_duration=0.35, min_speech_duration=0.08)
     session = AgentSession(
