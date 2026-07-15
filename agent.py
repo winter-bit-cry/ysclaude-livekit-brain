@@ -189,7 +189,7 @@ def _create_frontend_tool(ctx: JobContext, participant_identity: str, definition
         },
     }
 
-    async def handler(raw_arguments: dict[str, object], _run_context):
+    async def handler(raw_arguments: dict[str, object]):
         response = await ctx.room.local_participant.perform_rpc(
             destination_identity=participant_identity,
             method="ysclaude.execute_tool",
