@@ -40,7 +40,7 @@ class _VisualAgent(Agent):
         self._latest_video = latest_video
 
     async def on_user_turn_completed(
-        self, turn_ctx: llm.ChatContext, _new_message: llm.ChatMessage
+        self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         # Images from earlier turns are not useful for a live camera/screen view
         # and can make the model answer from a stale frame. Remove them from the
@@ -106,18 +106,22 @@ async def ysclaude_voice(ctx: JobContext) -> None:
         ),
         turn_handling=TurnHandlingOptions(
             turn_detection=inference.TurnDetector(),
-            min_endpointing_delay=0.3,
-            max_endpointing_delay=2.0,
-            allow_interruptions=True,
-            min_interruption_duration=0.2,
-            resume_false_interruption=True,
+            endpointing={
+                "min_delay": 0.3,
+                "max_delay": 2.0,
+            },
+            interruption={
+                "enabled": True,
+                "min_duration": 0.2,
+                "resume_false_interruption": True,
+            },
+            # Visual frames are appended in on_user_turn_completed. If
+            # generation starts early, the reply can miss the current frame.
+            # Retain the latency optimization only for voice-only calls.
+            preemptive_generation={
+                "enabled": config.visual_mode == "voice",
+            },
         ),
-        # Visual frames are appended in on_user_turn_completed. If preemptive
-        # generation is enabled, LiveKit may reuse a reply that started before
-        # the current frame was attached, making the model see the image one
-        # turn late. Keep the latency optimization for voice-only calls, but
-        # wait for the completed multimodal message in visual modes.
-        preemptive_generation=config.visual_mode == "voice",
         video_sampler=latest_video.sample if config.visual_mode != "voice" else None,
     )
     chat_ctx = ChatContext.empty()
