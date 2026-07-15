@@ -40,13 +40,34 @@ class _VisualAgent(Agent):
         self._latest_video = latest_video
 
     async def on_user_turn_completed(
-        self, _turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+        self, turn_ctx: llm.ChatContext, _new_message: llm.ChatMessage
     ) -> None:
+        # Images from earlier turns are not useful for a live camera/screen view
+        # and can make the model answer from a stale frame. Remove them from the
+        # temporary request context while retaining the text history.
+        for item in turn_ctx.items:
+            if isinstance(item, llm.ChatMessage):
+                item.content = [
+                    content
+                    for content in item.content
+                    if not isinstance(content, llm.ImageContent)
+                ]
+
         if self._latest_video.frame is not None:
-            new_message.content.append(llm.ImageContent(
-                image=self._latest_video.frame,
-                inference_detail="low",
-            ))
+            # Add the current frame only to this turn's temporary context. Do
+            # not append it to new_message: LiveKit persists new_message in the
+            # agent history after scheduling the reply, which would resend the
+            # frame on later turns.
+            turn_ctx.add_message(
+                role="user",
+                content=[
+                    "Current live camera or screen-share frame for this turn:",
+                    llm.ImageContent(
+                        image=self._latest_video.frame,
+                        inference_detail="auto",
+                    ),
+                ],
+            )
 
 
 @server.rtc_session(agent_name=os.getenv("LIVEKIT_AGENT_NAME", "ysclaude-voice"))
